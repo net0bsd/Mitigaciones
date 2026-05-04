@@ -1,0 +1,42 @@
+---
+- name: Mitigación Extendida CVE-2026-31431 (Copy Fail)
+  hosts: all
+  become: yes
+  vars:
+    mitigation_file: "/etc/modprobe.d/cve-2026-31431-strict.conf"
+    modules_to_block:
+      - algif_aead
+      - authencesn
+
+  tasks:
+    - name: "Crear archivo de blacklist estricto (CIS Standard)"
+      ansible.builtin.copy:
+        dest: "{{ mitigation_file }}"
+        content: |
+          # Bloqueo de API criptográfica para CVE-2026-31431
+          install algif_aead /bin/false
+          blacklist algif_aead
+          install authencesn /bin/false
+          blacklist authencesn
+        owner: root
+        group: root
+        mode: '0644'
+    
+    - name: "Descargar módulos de la memoria en caliente"
+      community.general.modprobe:
+        name: "{{ item }}"
+        state: absent
+      loop: "{{ modules_to_block }}"
+      ignore_errors: yes
+      register: modprobe_results
+
+    - name: "Auditoría post-mitigación"
+      ansible.builtin.shell: "lsmod | grep -E 'algif_aead|authencesn'"
+      register: lsmod_check
+      failed_when: false
+      changed_when: false
+
+    - name: "Validar si los módulos siguen activos"
+      ansible.builtin.fail:
+        msg: "CRÍTICO: Uno de los módulos sigue activo en memoria. Requiere revisión manual o reinicio."
+      when: lsmod_check.stdout != ""
