@@ -1,0 +1,70 @@
+## 1. CONFIGURACIÓN INICIAL
+# Eliminar reglas previas
+-D
+# Tamaño del buffer (ajustar según carga, 8192 es estándar para SRE)
+-b 8192
+# Acción ante buffer lleno (1=log)
+-f 1
+# Fallo crítico (1=printk)
+-e 1
+
+## 2. INTEGRIDAD DEL TIEMPO (CIS)
+-a always,exit -F arch=b64 -S adjtimex -S settimeofday -k audit_time_rules
+-w /etc/localtime -p wa -k audit_time_rules
+
+## 3. IDENTIDAD Y GRUPOS (Integridad de /etc/*)
+-w /etc/group -p wa -k identity
+-w /etc/passwd -p wa -k identity
+-w /etc/gshadow -p wa -k identity
+-w /etc/shadow -p wa -k identity
+-w /etc/security/opasswd -p wa -k identity
+
+## 4. CONFIGURACIÓN DE RED Y LOCALIZACIÓN
+-a always,exit -F arch=b64 -S sethostname -S setdomainname -k system_locale
+-w /etc/issue -p wa -k system_locale
+-w /etc/issue.net -p wa -k system_locale
+-w /etc/hosts -p wa -k system_locale
+-w /etc/sysconfig/network -p wa -k system_locale
+
+## 5. SSH Y MOVIMIENTOS LATERALES (Tu prioridad de rastreo)
+# Monitoreo de binarios de salto
+-a always,exit -F arch=b64 -S execve -F path=/usr/bin/ssh -k lateral_movement
+-a always,exit -F arch=b64 -S execve -F path=/usr/bin/scp -k lateral_movement
+-a always,exit -F arch=b64 -S execve -F path=/usr/sbin/sshd -k ssh_server
+# Configuración de SSH
+-w /etc/ssh/sshd_config -p wa -k sshd_config_changes
+
+## 6. LOGINS Y SESIONES (Señal de Tráfico/Errores)
+-w /var/log/lastlog -p wa -k logins
+-w /var/run/utmp -p wa -k session
+-w /var/log/wtmp -p wa -k session
+-w /var/log/btmp -p wa -k session
+
+## 7. EXTRACCIÓN DE PRIVILEGIOS Y SUDO[cite: 1]
+-w /etc/sudoers -p wa -k priv_esc
+-w /etc/sudoers.d/ -p wa -k priv_esc
+
+## 8. ACCESOS DENEGADOS (Señal de Errores - Intrusión)[cite: 1]
+-a always,exit -F arch=b64 -S open -S truncate -S ftruncate -S creat -S openat -S open_by_handle_at -F exit=-EACCES -k access_denied
+-a always,exit -F arch=b64 -S open -S truncate -S ftruncate -S creat -S openat -S open_by_handle_at -F exit=-EPERM -k access_denied
+
+## 9. MONITOREO DE USUARIOS DE SERVICIO (Apache/HTTPD/WWW)
+# Detecta si el usuario web (ID 48 en RHEL/SLES o 33 en Debian) ejecuta un shell
+-a always,exit -F arch=b64 -S execve -F euid=48 -k web_user_anomaly
+-a always,exit -F arch=b64 -S execve -F euid=33 -k web_user_anomaly
+# Si el proceso web intenta escalar privilegios sin tener un AUID real
+-a always,exit -F arch=b64 -S execve -F path=/usr/bin/sudo -F auid=4294967295 -k web_priv_esc
+
+## 10. MÓDULOS DEL KERNEL
+-w /sbin/insmod -p x -k modules
+-w /sbin/rmmod -p x -k modules
+-w /sbin/modprobe -p x -k modules
+-a always,exit -F arch=b64 -S init_module -S delete_module -k modules
+
+## 11. REGLAS DE RSYSLOG (Para asegurar tu reenvío remoto)[cite: 1]
+-w /etc/rsyslog.conf -p wa -k rsyslog_config
+-w /etc/rsyslog.d/ -p wa -k rsyslog_config
+
+## 12. INMUTABILIDAD (DESACTIVADA PARA PRUEBAS)
+# Una vez analizado y seguro, descomenta la siguiente línea para bloquear cambios:
+# -e 2
