@@ -14,3 +14,5 @@ Ejecutar con privilegios de superusuario:
 ```bash
 chmod +x cve-2026-31431-mitigator.sh
 sudo ./cve-2026-31431-mitigator.sh
+
+* **`rsyslog-sre-golden-signals.sh`**: Script para configurar Rsyslog, mapeando los eventos del sistema hacia las cuatro "Golden Signals" de SRE (Tráfico, Errores, Latencia, Saturación) y estableciendo el reenvío a un servidor central.
